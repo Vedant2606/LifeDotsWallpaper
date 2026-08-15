@@ -41,6 +41,16 @@ struct LifeDotsWallpaperApp: App {
             ContentView()
                 .environmentObject(settings)
                 .frame(minWidth: 1080, minHeight: 700)
+                .onReceive(
+                    NotificationCenter.default.publisher(
+                        for: NSApplication.didChangeScreenParametersNotification
+                    )
+                ) { _ in
+                    // Re-render for all screens when displays are connected or disconnected
+                    Task { @MainActor in
+                        try? WallpaperService.generateAndApply(settings: settings)
+                    }
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1240, height: 790)

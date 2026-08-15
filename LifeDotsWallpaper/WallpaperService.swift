@@ -8,13 +8,14 @@ enum WallpaperService {
             .appendingPathComponent("Pictures/LifeDotsWallpaper", isDirectory: true)
     }
 
-    private static func uniqueWallpaperURL(for date: Date = Date()) -> URL {
+    private static func uniqueWallpaperURL(for date: Date = Date(), screenIndex: Int = 0) -> URL {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        let suffix = NSScreen.screens.count > 1 ? "-screen\(screenIndex + 1)" : ""
         return wallpaperDirectory
-            .appendingPathComponent("life-dots-\(formatter.string(from: date)).png")
+            .appendingPathComponent("life-dots-\(formatter.string(from: date))\(suffix).png")
     }
 
     static func generateAndApply(settings: WallpaperSettings) throws {
@@ -35,13 +36,33 @@ enum WallpaperService {
         }
 
         do {
-            let renderer = WallpaperRenderer(settings: settings)
-            let image = try renderer.render(for: now)
-            let outputURL = uniqueWallpaperURL(for: now)
+            let screens = NSScreen.screens
+            var lastOutputURL: URL?
 
-            try renderer.savePNG(image, to: outputURL)
-            try apply(url: outputURL)
-            cleanupOldWallpapers(keeping: outputURL)
+            for (index, screen) in screens.enumerated() {
+                var renderer = WallpaperRenderer(settings: settings)
+                // Render at this screen's native pixel resolution
+                renderer.overrideCanvasSize = settings.resolvedCanvasSize(for: screen)
+
+                let image = try renderer.render(for: now)
+                let outputURL = uniqueWallpaperURL(for: now, screenIndex: index)
+
+                try renderer.savePNG(image, to: outputURL)
+                try NSWorkspace.shared.setDesktopImageURL(
+                    outputURL,
+                    for: screen,
+                    options: [
+                        NSWorkspace.DesktopImageOptionKey.imageScaling:
+                            NSImageScaling.scaleProportionallyUpOrDown.rawValue,
+                        NSWorkspace.DesktopImageOptionKey.allowClipping: false
+                    ]
+                )
+                lastOutputURL = outputURL
+            }
+
+            if let lastOutputURL {
+                cleanupOldWallpapers(keeping: lastOutputURL, screenCount: screens.count)
+            }
             settings.recordRefresh(status: "Succeeded", at: now)
         } catch {
             settings.recordRefresh(status: "Failed: \(error.localizedDescription)")
@@ -49,6 +70,7 @@ enum WallpaperService {
         }
     }
 
+    // Kept for external callers that need to re-apply an existing URL to all screens
     static func apply(url: URL) throws {
         for screen in NSScreen.screens {
             try NSWorkspace.shared.setDesktopImageURL(
@@ -63,7 +85,7 @@ enum WallpaperService {
         }
     }
 
-    private static func cleanupOldWallpapers(keeping currentURL: URL) {
+    private static func cleanupOldWallpapers(keeping currentURL: URL, screenCount: Int = 1) {
         let fileManager = FileManager.default
         guard let files = try? fileManager.contentsOfDirectory(
             at: wallpaperDirectory,
@@ -81,8 +103,8 @@ enum WallpaperService {
             return leftDate > rightDate
         }
 
-        // Keep the current wallpaper plus the two most recent previous files.
-        for oldURL in sorted.dropFirst(2) {
+        // Keep current generation plus two previous generations (×screenCount files each).
+        for oldURL in sorted.dropFirst(screenCount * 2) {
             try? fileManager.removeItem(at: oldURL)
         }
     }

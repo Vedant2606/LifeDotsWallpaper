@@ -370,4 +370,12 @@ final class WallpaperSettings: ObservableObject {
         }
         return CGSize(width: 2940, height: 1912)
     }
+
+    func resolvedCanvasSize(for screen: NSScreen) -> CGSize {
+        if let preset = canvasPreset.size { return preset }
+        let w = screen.frame.width * screen.backingScaleFactor
+        let h = screen.frame.height * screen.backingScaleFactor
+        guard w > 0, h > 0 else { return resolvedCanvasSize() }
+        return CGSize(width: w, height: h)
+    }
 }
