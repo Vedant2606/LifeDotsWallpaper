@@ -10,8 +10,6 @@ A private SwiftUI macOS utility that renders and applies a one-year day-dot wall
 
 ## Preview
 
-![App](screenshots/app-preview.png)
-
 ![Wallpaper](screenshots/wallpaper.png)
 
 ## Included
