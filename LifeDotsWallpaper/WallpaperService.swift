@@ -4,14 +4,17 @@ import Foundation
 @MainActor
 enum WallpaperService {
     static var wallpaperDirectory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("LifeDotsWallpaper", isDirectory: true)
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Pictures/LifeDotsWallpaper", isDirectory: true)
     }
 
-    // Fixed filename so macOS always updates the same thumbnail in System Settings
-    // rather than accumulating a new thumbnail entry for every generation.
-    private static var wallpaperURL: URL {
-        wallpaperDirectory.appendingPathComponent("life-dots.png")
+    private static func uniqueWallpaperURL(for date: Date = Date()) -> URL {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        return wallpaperDirectory
+            .appendingPathComponent("life-dots-\(formatter.string(from: date)).png")
     }
 
     static func generateAndApply(settings: WallpaperSettings) throws {
@@ -34,9 +37,11 @@ enum WallpaperService {
         do {
             let renderer = WallpaperRenderer(settings: settings)
             let image = try renderer.render(for: now)
+            let outputURL = uniqueWallpaperURL(for: now)
 
-            try renderer.savePNG(image, to: wallpaperURL)
-            try apply(url: wallpaperURL)
+            try renderer.savePNG(image, to: outputURL)
+            try apply(url: outputURL)
+            cleanupOldWallpapers(keeping: outputURL)
             settings.recordRefresh(status: "Succeeded", at: now)
         } catch {
             settings.recordRefresh(status: "Failed: \(error.localizedDescription)")
@@ -55,6 +60,30 @@ enum WallpaperService {
                     NSWorkspace.DesktopImageOptionKey.allowClipping: false
                 ]
             )
+        }
+    }
+
+    private static func cleanupOldWallpapers(keeping currentURL: URL) {
+        let fileManager = FileManager.default
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: wallpaperDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        let pngFiles = files.filter {
+            $0.pathExtension.lowercased() == "png" && $0 != currentURL
+        }
+
+        let sorted = pngFiles.sorted { lhs, rhs in
+            let leftDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            let rightDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            return leftDate > rightDate
+        }
+
+        // Keep the current wallpaper plus the two most recent previous files.
+        for oldURL in sorted.dropFirst(2) {
+            try? fileManager.removeItem(at: oldURL)
         }
     }
 }
