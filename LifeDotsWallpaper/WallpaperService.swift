@@ -4,18 +4,14 @@ import Foundation
 @MainActor
 enum WallpaperService {
     static var wallpaperDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Pictures/LifeDotsWallpaper", isDirectory: true)
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LifeDotsWallpaper", isDirectory: true)
     }
 
-    private static func uniqueWallpaperURL(for date: Date = Date(), screenIndex: Int = 0) -> URL {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
-        let suffix = NSScreen.screens.count > 1 ? "-screen\(screenIndex + 1)" : ""
-        return wallpaperDirectory
-            .appendingPathComponent("life-dots-\(formatter.string(from: date))\(suffix).png")
+    // Fixed filename so macOS always updates the same thumbnail in System Settings
+    // rather than accumulating a new thumbnail entry for every generation.
+    private static var wallpaperURL: URL {
+        wallpaperDirectory.appendingPathComponent("life-dots.png")
     }
 
     static func generateAndApply(settings: WallpaperSettings) throws {
@@ -36,33 +32,11 @@ enum WallpaperService {
         }
 
         do {
-            let screens = NSScreen.screens
-            var lastOutputURL: URL?
+            let renderer = WallpaperRenderer(settings: settings)
+            let image = try renderer.render(for: now)
 
-            for (index, screen) in screens.enumerated() {
-                var renderer = WallpaperRenderer(settings: settings)
-                // Render at this screen's native pixel resolution
-                renderer.overrideCanvasSize = settings.resolvedCanvasSize(for: screen)
-
-                let image = try renderer.render(for: now)
-                let outputURL = uniqueWallpaperURL(for: now, screenIndex: index)
-
-                try renderer.savePNG(image, to: outputURL)
-                try NSWorkspace.shared.setDesktopImageURL(
-                    outputURL,
-                    for: screen,
-                    options: [
-                        NSWorkspace.DesktopImageOptionKey.imageScaling:
-                            NSImageScaling.scaleProportionallyUpOrDown.rawValue,
-                        NSWorkspace.DesktopImageOptionKey.allowClipping: false
-                    ]
-                )
-                lastOutputURL = outputURL
-            }
-
-            if let lastOutputURL {
-                cleanupOldWallpapers(keeping: lastOutputURL, screenCount: screens.count)
-            }
+            try renderer.savePNG(image, to: wallpaperURL)
+            try apply(url: wallpaperURL)
             settings.recordRefresh(status: "Succeeded", at: now)
         } catch {
             settings.recordRefresh(status: "Failed: \(error.localizedDescription)")
@@ -70,7 +44,6 @@ enum WallpaperService {
         }
     }
 
-    // Kept for external callers that need to re-apply an existing URL to all screens
     static func apply(url: URL) throws {
         for screen in NSScreen.screens {
             try NSWorkspace.shared.setDesktopImageURL(
@@ -82,30 +55,6 @@ enum WallpaperService {
                     NSWorkspace.DesktopImageOptionKey.allowClipping: false
                 ]
             )
-        }
-    }
-
-    private static func cleanupOldWallpapers(keeping currentURL: URL, screenCount: Int = 1) {
-        let fileManager = FileManager.default
-        guard let files = try? fileManager.contentsOfDirectory(
-            at: wallpaperDirectory,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        ) else { return }
-
-        let pngFiles = files.filter {
-            $0.pathExtension.lowercased() == "png" && $0 != currentURL
-        }
-
-        let sorted = pngFiles.sorted { lhs, rhs in
-            let leftDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
-            let rightDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
-            return leftDate > rightDate
-        }
-
-        // Keep current generation plus two previous generations (×screenCount files each).
-        for oldURL in sorted.dropFirst(screenCount * 2) {
-            try? fileManager.removeItem(at: oldURL)
         }
     }
 }

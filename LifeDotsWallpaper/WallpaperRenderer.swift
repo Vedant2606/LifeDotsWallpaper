@@ -6,12 +6,6 @@ import Foundation
 struct WallpaperRenderer {
     let settings: WallpaperSettings
     var todayPulseScale: CGFloat = 1.0
-    // Set by WallpaperService when rendering for a specific screen; overrides settings preset
-    var overrideCanvasSize: CGSize? = nil
-
-    private var effectiveCanvasSize: CGSize {
-        overrideCanvasSize ?? settings.resolvedCanvasSize()
-    }
 
     private struct TimelineData {
         var calendar: Calendar
@@ -52,7 +46,7 @@ struct WallpaperRenderer {
     }
 
     func render(for date: Date = Date()) throws -> NSImage {
-        let size = effectiveCanvasSize
+        let size = settings.resolvedCanvasSize()
         guard let bitmap = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: Int(size.width),
@@ -364,10 +358,10 @@ struct WallpaperRenderer {
         // Clip blurred image inside panel (frosted glass tint from background)
         if settings.backgroundStyle == .image,
            let path = settings.backgroundImagePath,
-           let blurred = blurredImage(url: URL(fileURLWithPath: path), canvasSize: effectiveCanvasSize, radius: max(1, blurAmount * 30)) {
+           let blurred = blurredImage(url: URL(fileURLWithPath: path), canvasSize: settings.resolvedCanvasSize(), radius: max(1, blurAmount * 30)) {
             NSGraphicsContext.saveGraphicsState()
             panel.addClip()
-            blurred.draw(in: NSRect(origin: .zero, size: effectiveCanvasSize))
+            blurred.draw(in: NSRect(origin: .zero, size: settings.resolvedCanvasSize()))
             NSGraphicsContext.restoreGraphicsState()
         }
 
