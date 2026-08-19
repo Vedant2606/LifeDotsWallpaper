@@ -8,6 +8,12 @@ A private SwiftUI macOS utility that renders and applies a one-year day-dot wall
 
 > Requires Apple Silicon Mac (M1 or later). On first launch, right-click the app → **Open** to bypass the macOS security prompt.
 
+## Preview
+
+![App](screenshots/app-preview.png)
+
+![Wallpaper](screenshots/wallpaper.png)
+
 ## Included
 
 - Proper native macOS application target
