@@ -4,7 +4,7 @@ A private SwiftUI macOS utility that renders and applies a one-year day-dot wall
 
 ## Download
 
-[![Download](https://img.shields.io/badge/Download-v1.0-blue)](https://github.com/Vedant2606/LifeDotsWallpaper/releases/download/v1.0/LifeDotsWallpaper.zip)
+[![macOS Download](https://img.shields.io/badge/macOS_Download-v1.0-0078D4?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Vedant2606/LifeDotsWallpaper/releases/download/v1.0/LifeDotsWallpaper.zip)
 
 > Requires Apple Silicon Mac (M1 or later). On first launch, right-click the app → **Open** to bypass the macOS security prompt.
 
